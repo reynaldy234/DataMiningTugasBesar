@@ -13,7 +13,6 @@ st.set_page_config(page_title="Dashboard Analisis Diabetes", layout="wide")
 
 # Load dan siapkan data
 @st.cache_data
-
 def load_data():
     df = pd.read_csv("diabetes_prediction_dataset.csv")
     df['gender'] = LabelEncoder().fit_transform(df['gender'])
@@ -73,6 +72,10 @@ elif menu == "Clustering (K-Means)":
     st.dataframe(cluster_summary.style.format({"Persentase Diabetes": "{:.2f}%"}))
 
     st.subheader("🧠 Interpretasi per Cluster")
+
+    mean_hba1c = cluster_summary['HbA1c_level'].mean()
+    mean_glucose = cluster_summary['blood_glucose_level'].mean()
+
     for _, row in cluster_summary.iterrows():
         cluster = int(row['Cluster'])
         hba1c = row['HbA1c_level']
@@ -80,30 +83,34 @@ elif menu == "Clustering (K-Means)":
         diabetes_pct = row['Persentase Diabetes']
 
         st.markdown(f"### Cluster {cluster}")
-        risk_level = "rendah"
+
         explanations = []
 
-        if hba1c > 6.4:
-            risk_level = "tinggi"
-            explanations.append("HbA1c rata-rata melebihi 6.4, yang menunjukkan kemungkinan diabetes")
-        elif hba1c > 5.7:
-            risk_level = "sedang"
-            explanations.append("HbA1c rata-rata antara 5.7 dan 6.4, yang menunjukkan pradiabetes")
+        # Penilaian berdasarkan rata-rata per cluster
+        if hba1c > mean_hba1c:
+            hba1c_level = "tinggi"
+            explanations.append(f"Rata-rata HbA1c {hba1c:.2f} lebih tinggi dari rata-rata semua cluster ({mean_hba1c:.2f})")
+        elif hba1c > mean_hba1c - 0.3:
+            hba1c_level = "sedang"
+            explanations.append(f"Rata-rata HbA1c {hba1c:.2f} sedikit di bawah rata-rata semua cluster")
+        else:
+            hba1c_level = "rendah"
+            explanations.append(f"Rata-rata HbA1c {hba1c:.2f} jauh di bawah rata-rata")
 
-        if glucose > 125:
-            if risk_level != "tinggi":
-                risk_level = "tinggi"
-            explanations.append("Kadar glukosa rata-rata di atas 125 mg/dL, mengindikasikan diabetes")
-        elif glucose > 100:
-            if risk_level == "rendah":
-                risk_level = "sedang"
-            explanations.append("Kadar glukosa rata-rata antara 100-125 mg/dL, mengindikasikan pradiabetes")
-
-        if not explanations:
-            explanations.append("HbA1c dan kadar glukosa berada dalam batas normal")
+        if glucose > mean_glucose:
+            glucose_level = "tinggi"
+            explanations.append(f"Rata-rata glukosa {glucose:.2f} lebih tinggi dari rata-rata semua cluster ({mean_glucose:.2f})")
+        elif glucose > mean_glucose - 5:
+            glucose_level = "sedang"
+            explanations.append(f"Rata-rata glukosa {glucose:.2f} sedikit di bawah rata-rata")
+        else:
+            glucose_level = "rendah"
+            explanations.append(f"Rata-rata glukosa {glucose:.2f} jauh di bawah rata-rata")
 
         st.markdown(f"- **Persentase Diabetes:** {diabetes_pct:.2f}%")
-        st.markdown(f"- **Tingkat Risiko:** {risk_level.capitalize()} berdasarkan:")
+        st.markdown(f"- **Tingkat HbA1c:** {hba1c_level.capitalize()}")
+        st.markdown(f"- **Tingkat Glukosa:** {glucose_level.capitalize()}")
+        st.markdown(f"- **Interpretasi:** Risiko diabetes pada cluster ini sebesar {diabetes_pct:.2f}%.")
         for ex in explanations:
             st.markdown(f"  - {ex}")
 
@@ -160,6 +167,8 @@ elif menu == "Prediksi Diabetes":
                                     columns=features)
 
         input_scaled = scaler.transform(input_data)
+        model = LogisticRegression(max_iter=1000)
+        model.fit(X_scaled, y)
         pred = model.predict(input_scaled)[0]
         prob = model.predict_proba(input_scaled)[0][1]
 
