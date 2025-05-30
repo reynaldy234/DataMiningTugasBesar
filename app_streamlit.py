@@ -1,35 +1,36 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
-import seaborn as sns
+from sklearn.metrics import roc_curve, roc_auc_score, confusion_matrix, classification_report
 
 st.set_page_config(page_title="Dashboard Analisis Diabetes", layout="wide")
 
+# Load dan siapkan data
 @st.cache_data
-def load_data_model():
+
+def load_data():
     df = pd.read_csv("diabetes_prediction_dataset.csv")
     df['gender'] = LabelEncoder().fit_transform(df['gender'])
     df['smoking_history'] = LabelEncoder().fit_transform(df['smoking_history'])
-    features = ['age', 'bmi', 'HbA1c_level', 'blood_glucose_level', 'gender', 'hypertension', 'heart_disease', 'smoking_history']
-    X = df[features]
-    y = df['diabetes']
+    return df
 
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+df = load_data()
 
-    model = LogisticRegression(max_iter=1000)
-    model.fit(X_scaled, y)
+features = ['age', 'bmi', 'HbA1c_level', 'blood_glucose_level',
+            'gender', 'hypertension', 'heart_disease', 'smoking_history']
+X = df[features]
+y = df['diabetes']
 
-    return df, model, scaler, features, X_scaled, y
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
-df, model, scaler, features, X_scaled, y = load_data_model()
-
+# Sidebar
 st.sidebar.title("Navigasi")
 menu = st.sidebar.radio("Pilih Halaman", ["Beranda", "Clustering (K-Means)", "Regresi Logistik", "Prediksi Diabetes"])
 
@@ -38,109 +39,130 @@ st.title("📊 Dashboard Analisis Risiko Diabetes")
 if menu == "Beranda":
     st.header("📁 Deskripsi Dataset")
     st.dataframe(df.head())
-    st.write(f"Jumlah data: {df.shape[0]}")
-    st.write(f"Fitur: {df.columns.tolist()}")
+    st.markdown(f"Jumlah Data: **{df.shape[0]}**")
+    st.markdown(f"Jumlah Fitur: **{len(df.columns)}**")
 
 elif menu == "Clustering (K-Means)":
-    st.header("🔍 Analisis Clustering (K-Means)")
+    st.header("🔍 Analisis Cluster (K-Means)")
 
-    k = st.sidebar.slider("Jumlah Cluster", min_value=2, max_value=10, value=3)
-    kmeans = KMeans(n_clusters=k, random_state=42)
-    clusters = kmeans.fit_predict(X_scaled)
+    n_clusters = st.sidebar.slider("Jumlah Cluster", min_value=2, max_value=6, value=3)
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    cluster_labels = kmeans.fit_predict(X_scaled)
 
     pca = PCA(n_components=2)
     components = pca.fit_transform(X_scaled)
-
-    df['Cluster'] = clusters
     cluster_df = pd.DataFrame(components, columns=['PC1', 'PC2'])
-    cluster_df['Cluster'] = clusters
+    cluster_df['Cluster'] = cluster_labels
 
+    df['Cluster'] = cluster_labels
+
+    st.subheader("Visualisasi PCA per Cluster")
     fig, ax = plt.subplots()
-    sns.scatterplot(data=cluster_df, x='PC1', y='PC2', hue='Cluster', palette='Set1', ax=ax)
+    sns.scatterplot(data=cluster_df, x='PC1', y='PC2', hue='Cluster', palette='Set2', ax=ax)
     ax.set_title("Visualisasi PCA dari Clustering")
     st.pyplot(fig)
 
-    st.subheader("📋 Karakteristik Rata-Rata per Cluster")
-    cluster_summary = df.groupby('Cluster')[features + ['diabetes']].mean().round(2)
-    cluster_summary['Persentase_Diabetes'] = (df.groupby('Cluster')['diabetes'].mean() * 100).round(2)
+    st.subheader("📊 Karakteristik Rata-rata per Cluster")
+    cluster_summary = df.groupby('Cluster')[features + ['diabetes']].mean().reset_index()
+    cluster_counts = df['Cluster'].value_counts().reset_index()
+    cluster_counts.columns = ['Cluster', 'Jumlah Individu']
+    cluster_summary = pd.merge(cluster_summary, cluster_counts, on='Cluster')
 
-    def interpret_risk(row):
-        diabetes_percent = row['Persentase_Diabetes']
-        if row['blood_glucose_level'] >= 126 or row['HbA1c_level'] >= 6.5:
-            risk = "Risiko Tinggi"
-            reason = "Karena kadar gula darah rata-rata \u2265 126 mg/dL atau HbA1c \u2265 6.5% \n(ambang batas diagnosa diabetes menurut standar medis)."
-        elif 100 <= row['blood_glucose_level'] < 126 or 5.7 <= row['HbA1c_level'] < 6.5:
-            risk = "Risiko Sedang"
-            reason = "Karena kadar gula darah rata-rata antara 100-125 mg/dL atau HbA1c antara 5.7% sampai < 6.5%, \nmenandakan kondisi prediabetes."
-        else:
-            risk = "Risiko Rendah"
-            reason = "Karena kadar gula darah rata-rata < 100 mg/dL dan HbA1c < 5.7%, \nmenunjukkan kondisi gula darah normal."
-        return pd.Series([risk, reason])
+    cluster_summary['Persentase Diabetes'] = df.groupby('Cluster')['diabetes'].mean().values * 100
 
-    cluster_summary[['Interpretasi Risiko', 'Penjelasan']] = cluster_summary.apply(interpret_risk, axis=1)
+    st.dataframe(cluster_summary.style.format({"Persentase Diabetes": "{:.2f}%"}))
 
-    st.dataframe(cluster_summary)
+    st.subheader("🧠 Interpretasi per Cluster")
+    for _, row in cluster_summary.iterrows():
+        cluster = int(row['Cluster'])
+        hba1c = row['HbA1c_level']
+        glucose = row['blood_glucose_level']
+        diabetes_pct = row['Persentase Diabetes']
 
-    st.subheader("🧾 Interpretasi Tiap Cluster")
-    for i, row in cluster_summary.iterrows():
-        st.markdown(f"### Cluster {i}")
-        st.write(f"**Risiko Diabetes:** {row['Interpretasi Risiko']}")
-        st.write(f"**Persentase Diabetes:** {row['Persentase_Diabetes']}%")
-        st.write(f"**Penjelasan:** {row['Penjelasan']}")
-        st.markdown("---")
+        st.markdown(f"### Cluster {cluster}")
+        risk_level = "rendah"
+        explanations = []
+
+        if hba1c > 6.4:
+            risk_level = "tinggi"
+            explanations.append("HbA1c rata-rata melebihi 6.4, yang menunjukkan kemungkinan diabetes")
+        elif hba1c > 5.7:
+            risk_level = "sedang"
+            explanations.append("HbA1c rata-rata antara 5.7 dan 6.4, yang menunjukkan pradiabetes")
+
+        if glucose > 125:
+            if risk_level != "tinggi":
+                risk_level = "tinggi"
+            explanations.append("Kadar glukosa rata-rata di atas 125 mg/dL, mengindikasikan diabetes")
+        elif glucose > 100:
+            if risk_level == "rendah":
+                risk_level = "sedang"
+            explanations.append("Kadar glukosa rata-rata antara 100-125 mg/dL, mengindikasikan pradiabetes")
+
+        if not explanations:
+            explanations.append("HbA1c dan kadar glukosa berada dalam batas normal")
+
+        st.markdown(f"- **Persentase Diabetes:** {diabetes_pct:.2f}%")
+        st.markdown(f"- **Tingkat Risiko:** {risk_level.capitalize()} berdasarkan:")
+        for ex in explanations:
+            st.markdown(f"  - {ex}")
 
 elif menu == "Regresi Logistik":
     st.header("📈 Evaluasi Model Regresi Logistik")
-    from sklearn.metrics import roc_curve, roc_auc_score, confusion_matrix, classification_report
+
+    model = LogisticRegression(max_iter=1000)
+    model.fit(X_scaled, y)
 
     y_prob = model.predict_proba(X_scaled)[:, 1]
+    y_pred = model.predict(X_scaled)
+
     fpr, tpr, _ = roc_curve(y, y_prob)
     auc = roc_auc_score(y, y_prob)
 
+    st.subheader("ROC Curve")
     fig, ax = plt.subplots()
-    ax.plot(fpr, tpr, label=f"ROC Curve (AUC = {auc:.2f})")
+    ax.plot(fpr, tpr, label=f"AUC = {auc:.2f}")
     ax.plot([0, 1], [0, 1], linestyle='--', color='gray')
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
-    ax.set_title("ROC Curve")
+    ax.set_title("Kurva ROC")
     ax.legend()
     st.pyplot(fig)
 
-    y_pred = model.predict(X_scaled)
+    st.subheader("Confusion Matrix dan Laporan Klasifikasi")
     cm = confusion_matrix(y, y_pred)
-    st.subheader("📊 Confusion Matrix")
-    st.write(pd.DataFrame(cm, index=["Aktual Negatif", "Aktual Positif"], columns=["Pred Negatif", "Pred Positif"]))
+    cm_df = pd.DataFrame(cm, index=["Non-Diabetes", "Diabetes"], columns=["Prediksi Non-Diabetes", "Prediksi Diabetes"])
+    st.dataframe(cm_df)
 
-    st.subheader("📄 Classification Report")
     report = classification_report(y, y_pred, output_dict=True)
-    st.write(pd.DataFrame(report).transpose())
+    report_df = pd.DataFrame(report).transpose()
+    st.dataframe(report_df.style.format("{:.2f}"))
 
 elif menu == "Prediksi Diabetes":
-    st.header("🧪 Prediksi Risiko Diabetes")
-    st.write("Masukkan informasi kesehatan Anda untuk memprediksi kemungkinan risiko diabetes:")
+    st.header("🧪 Prediksi Risiko Diabetes Baru")
+    st.write("Masukkan data berikut untuk memprediksi kemungkinan diabetes:")
 
-    age = st.number_input("Umur", min_value=0, max_value=120, value=30)
-    bmi = st.number_input("BMI", min_value=10.0, max_value=50.0, value=22.0)
-    hba1c = st.number_input("HbA1c Level", min_value=3.0, max_value=15.0, value=5.5)
-    glucose = st.number_input("Kadar Glukosa Darah", min_value=50, max_value=300, value=100)
+    age = st.number_input("Umur", 0, 120, 30)
+    bmi = st.number_input("BMI", 10.0, 50.0, 22.0)
+    hba1c = st.number_input("HbA1c Level", 3.0, 15.0, 5.5)
+    glucose = st.number_input("Kadar Glukosa Darah", 50, 300, 100)
     gender = st.selectbox("Jenis Kelamin", ["Male", "Female", "Other"])
     hypertension = st.selectbox("Hipertensi", ["Tidak", "Ya"])
     heart_disease = st.selectbox("Penyakit Jantung", ["Tidak", "Ya"])
-    smoking_history = st.selectbox("Riwayat Merokok", ["never", "current", "former", "ever", "not current", "No Info"])
+    smoking = st.selectbox("Riwayat Merokok", ["never", "current", "former", "ever", "not current", "No Info"])
 
     if st.button("Prediksi"):
-        gender_enc = LabelEncoder().fit(["Male", "Female", "Other"]).transform([gender])[0]
-        smoking_enc = LabelEncoder().fit(["never", "current", "former", "ever", "not current", "No Info"]).transform([smoking_history])[0]
-        hypertension_enc = 1 if hypertension == "Ya" else 0
-        heart_disease_enc = 1 if heart_disease == "Ya" else 0
+        input_data = pd.DataFrame([[age, bmi, hba1c, glucose,
+                                     LabelEncoder().fit(["Male", "Female", "Other"]).transform([gender])[0],
+                                     1 if hypertension == "Ya" else 0,
+                                     1 if heart_disease == "Ya" else 0,
+                                     LabelEncoder().fit(["never", "current", "former", "ever", "not current", "No Info"]).transform([smoking])[0]]],
+                                    columns=features)
 
-        input_df = pd.DataFrame([[age, bmi, hba1c, glucose, gender_enc, hypertension_enc, heart_disease_enc, smoking_enc]],
-                                columns=features)
-
-        input_scaled = scaler.transform(input_df)
-        prediction = model.predict(input_scaled)[0]
-        probability = model.predict_proba(input_scaled)[0][1]
+        input_scaled = scaler.transform(input_data)
+        pred = model.predict(input_scaled)[0]
+        prob = model.predict_proba(input_scaled)[0][1]
 
         st.subheader("Hasil Prediksi")
-        st.write(f"Prediksi Diabetes: **{'Ya' if prediction == 1 else 'Tidak'}**")
-        st.write(f"Probabilitas: **{probability:.2f}**")
+        st.markdown(f"**Prediksi:** {'Diabetes' if pred == 1 else 'Tidak Diabetes'}")
+        st.markdown(f"**Probabilitas:** {prob:.2f}")
