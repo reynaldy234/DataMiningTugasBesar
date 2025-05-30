@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
@@ -12,7 +11,7 @@ import seaborn as sns
 
 st.set_page_config(page_title="Dashboard Analisis Diabetes", layout="wide")
 
-# Load model dan data
+# Load data dan model
 @st.cache_data
 def load_data_model():
     df = pd.read_csv("diabetes_prediction_dataset.csv")
@@ -32,15 +31,14 @@ def load_data_model():
 
     return df, model, scaler, X, X_scaled, y, features
 
-# Load data dan model
-(df, model, scaler, X, X_scaled, y, features) = load_data_model()
+df, model, scaler, X, X_scaled, y, features = load_data_model()
 
 # Sidebar
 st.sidebar.title("Navigasi")
 menu = st.sidebar.radio("Pilih Halaman", ["Beranda", "Clustering (K-Means)", "Regresi Logistik", "Prediksi Diabetes"])
 
-# K-Means Settings
-n_clusters = st.sidebar.slider("Jumlah Kluster (untuk K-Means)", min_value=2, max_value=10, value=3)
+# Pengaturan KMeans di sidebar
+n_clusters = st.sidebar.slider("Jumlah Kluster (K-Means)", min_value=2, max_value=10, value=3)
 kmeans = KMeans(n_clusters=n_clusters, random_state=0)
 clusters = kmeans.fit_predict(X_scaled)
 pca = PCA(n_components=2)
@@ -48,7 +46,7 @@ components = pca.fit_transform(X_scaled)
 cluster_df = pd.DataFrame(components, columns=['PC1', 'PC2'])
 cluster_df['Cluster'] = clusters
 
-# Main
+# Main app
 st.title("Dashboard Analisis Risiko Diabetes")
 
 if menu == "Beranda":
@@ -59,38 +57,38 @@ if menu == "Beranda":
 
 elif menu == "Clustering (K-Means)":
     st.header("Visualisasi Clustering (K-Means)")
+
+    # Plot PCA
     fig, ax = plt.subplots()
     sns.scatterplot(data=cluster_df, x='PC1', y='PC2', hue='Cluster', palette='Set1', ax=ax)
     ax.set_title("Visualisasi Kluster (PCA)")
     st.pyplot(fig)
 
-    st.subheader("Interpretasi Kluster")
+    # Tabel karakteristik rata-rata per cluster
+    st.subheader("Karakteristik Rata-Rata per Kluster")
     desc = pd.DataFrame(X_scaled, columns=features)
     desc['Cluster'] = clusters
     cluster_summary = desc.groupby('Cluster').mean()
 
+    st.dataframe(cluster_summary.style.format("{:.2f}"))
+
+    # Interpretasi sederhana
     for i in range(n_clusters):
-        st.markdown(f"### Kluster {i}")
         cluster_data = cluster_summary.loc[i]
-        st.write(f"- Rata-rata usia: {cluster_data['age']:.2f}")
-        st.write(f"- Rata-rata BMI: {cluster_data['bmi']:.2f}")
-        st.write(f"- Rata-rata kadar HbA1c: {cluster_data['HbA1c_level']:.2f}")
-        st.write(f"- Rata-rata kadar glukosa darah: {cluster_data['blood_glucose_level']:.2f}")
-        st.write(f"- Rata-rata hipertensi: {'Tinggi' if cluster_data['hypertension'] > 0.5 else 'Rendah'}")
-        st.write(f"- Rata-rata penyakit jantung: {'Tinggi' if cluster_data['heart_disease'] > 0.5 else 'Rendah'}")
-        st.write("**Interpretasi:**")
-        if cluster_data['blood_glucose_level'] > 160 or cluster_data['HbA1c_level'] > 7:
-            st.markdown("- Kelompok ini kemungkinan memiliki risiko diabetes yang tinggi.")
-        elif cluster_data['blood_glucose_level'] > 120:
-            st.markdown("- Kelompok ini berada pada risiko sedang.")
+        st.markdown(f"**Kluster {i}:**")
+        if cluster_data['blood_glucose_level'] > 1.0 or cluster_data['HbA1c_level'] > 1.0:
+            st.write("- Kelompok ini berisiko tinggi terhadap diabetes.")
+        elif cluster_data['blood_glucose_level'] > 0.5:
+            st.write("- Kelompok ini berisiko sedang terhadap diabetes.")
         else:
-            st.markdown("- Kelompok ini memiliki risiko diabetes yang rendah.")
+            st.write("- Kelompok ini berisiko rendah terhadap diabetes.")
 
 elif menu == "Regresi Logistik":
     st.header("Evaluasi Model Regresi Logistik")
+
     y_prob = model.predict_proba(X_scaled)[:, 1]
     y_pred = model.predict(X_scaled)
-    
+
     # ROC Curve
     fpr, tpr, _ = roc_curve(y, y_prob)
     auc = roc_auc_score(y, y_prob)
@@ -104,17 +102,17 @@ elif menu == "Regresi Logistik":
     ax.legend()
     st.pyplot(fig)
 
-    # Confusion Matrix & Report
+    # Confusion matrix & classification report
     cm = confusion_matrix(y, y_pred)
     cr = classification_report(y, y_pred, output_dict=True)
 
-    st.subheader("Matriks Kebingungan")
+    st.subheader("Confusion Matrix")
     cm_df = pd.DataFrame(cm, index=["Aktual: Tidak", "Aktual: Ya"], columns=["Prediksi: Tidak", "Prediksi: Ya"])
     st.dataframe(cm_df)
 
     st.subheader("Laporan Klasifikasi")
     cr_df = pd.DataFrame(cr).transpose()
-    st.dataframe(cr_df)
+    st.dataframe(cr_df.style.format("{:.2f}"))
 
 elif menu == "Prediksi Diabetes":
     st.header("Prediksi Risiko Diabetes")
