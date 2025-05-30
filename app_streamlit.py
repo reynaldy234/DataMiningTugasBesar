@@ -11,16 +11,16 @@ import seaborn as sns
 
 st.set_page_config(page_title="Dashboard Analisis Diabetes", layout="wide")
 
-# Load data dan model
 @st.cache_data
 def load_data_model():
     df = pd.read_csv("diabetes_prediction_dataset.csv")
+    # Encoding categorical
     df['gender'] = LabelEncoder().fit_transform(df['gender'])
     df['smoking_history'] = LabelEncoder().fit_transform(df['smoking_history'])
     
     features = ['age', 'bmi', 'HbA1c_level', 'blood_glucose_level', 
                 'gender', 'hypertension', 'heart_disease', 'smoking_history']
-    X = df[features]
+    X = df[features]  # fitur asli
     y = df['diabetes']
 
     scaler = StandardScaler()
@@ -37,16 +37,16 @@ df, model, scaler, X, X_scaled, y, features = load_data_model()
 st.sidebar.title("Navigasi")
 menu = st.sidebar.radio("Pilih Halaman", ["Beranda", "Clustering (K-Means)", "Regresi Logistik", "Prediksi Diabetes"])
 
-# Pengaturan KMeans di sidebar
+# Pengaturan jumlah kluster KMeans
 n_clusters = st.sidebar.slider("Jumlah Kluster (K-Means)", min_value=2, max_value=10, value=3)
 kmeans = KMeans(n_clusters=n_clusters, random_state=0)
 clusters = kmeans.fit_predict(X_scaled)
+
 pca = PCA(n_components=2)
 components = pca.fit_transform(X_scaled)
 cluster_df = pd.DataFrame(components, columns=['PC1', 'PC2'])
 cluster_df['Cluster'] = clusters
 
-# Main app
 st.title("Dashboard Analisis Risiko Diabetes")
 
 if menu == "Beranda":
@@ -58,30 +58,31 @@ if menu == "Beranda":
 elif menu == "Clustering (K-Means)":
     st.header("Visualisasi Clustering (K-Means)")
 
-    # Plot PCA
+    # Visualisasi PCA
     fig, ax = plt.subplots()
     sns.scatterplot(data=cluster_df, x='PC1', y='PC2', hue='Cluster', palette='Set1', ax=ax)
     ax.set_title("Visualisasi Kluster (PCA)")
     st.pyplot(fig)
 
-    # Tabel karakteristik rata-rata per cluster
-    st.subheader("Karakteristik Rata-Rata per Kluster")
-    desc = pd.DataFrame(X_scaled, columns=features)
+    # Tabel karakteristik rata-rata per cluster (data asli)
+    st.subheader("Karakteristik Rata-Rata per Kluster (Data Asli)")
+    desc = pd.DataFrame(X, columns=features)
     desc['Cluster'] = clusters
     cluster_summary = desc.groupby('Cluster').mean()
 
     st.dataframe(cluster_summary.style.format("{:.2f}"))
 
-    # Interpretasi sederhana
+    # Interpretasi singkat berdasarkan nilai asli
+    st.subheader("Interpretasi Risiko Diabetes per Kluster")
     for i in range(n_clusters):
         cluster_data = cluster_summary.loc[i]
         st.markdown(f"**Kluster {i}:**")
-        if cluster_data['blood_glucose_level'] > 1.0 or cluster_data['HbA1c_level'] > 1.0:
-            st.write("- Kelompok ini berisiko tinggi terhadap diabetes.")
-        elif cluster_data['blood_glucose_level'] > 0.5:
-            st.write("- Kelompok ini berisiko sedang terhadap diabetes.")
+        if cluster_data['blood_glucose_level'] > 140 or cluster_data['HbA1c_level'] > 6.5:
+            st.write("- Kelompok ini memiliki risiko diabetes **TINGGI**.")
+        elif cluster_data['blood_glucose_level'] > 120:
+            st.write("- Kelompok ini memiliki risiko diabetes **SEDANG**.")
         else:
-            st.write("- Kelompok ini berisiko rendah terhadap diabetes.")
+            st.write("- Kelompok ini memiliki risiko diabetes **RENDAH**.")
 
 elif menu == "Regresi Logistik":
     st.header("Evaluasi Model Regresi Logistik")
@@ -102,12 +103,12 @@ elif menu == "Regresi Logistik":
     ax.legend()
     st.pyplot(fig)
 
-    # Confusion matrix & classification report
+    # Confusion matrix & classification report dalam bentuk tabel
     cm = confusion_matrix(y, y_pred)
     cr = classification_report(y, y_pred, output_dict=True)
 
-    st.subheader("Confusion Matrix")
-    cm_df = pd.DataFrame(cm, index=["Aktual: Tidak", "Aktual: Ya"], columns=["Prediksi: Tidak", "Prediksi: Ya"])
+    st.subheader("Matriks Kebingungan")
+    cm_df = pd.DataFrame(cm, index=["Aktual: Tidak Diabetes", "Aktual: Diabetes"], columns=["Prediksi: Tidak Diabetes", "Prediksi: Diabetes"])
     st.dataframe(cm_df)
 
     st.subheader("Laporan Klasifikasi")
