@@ -44,13 +44,13 @@ df, model, scaler, X_scaled, y, gender_encoder, smoking_encoder = load_data_mode
 
 # Sidebar Navigasi
 st.sidebar.title("Navigasi")
-menu = st.sidebar.radio("Pilih Halaman", ["📊 Beranda", "🔍 Clustering (K-Means)", "📈 Regresi Logistik", "🧪 Prediksi Diabetes"])
+menu = st.sidebar.radio("Pilih Halaman", ["\ud83d\udcca Beranda", "\ud83d\udd0d Clustering (K-Means)", "\ud83d\udcc8 Regresi Logistik", "\ud83e\uddea Prediksi Diabetes"])
 
 # Judul Halaman
 st.title("Dashboard Analisis Risiko Diabetes")
 
 # Halaman Beranda
-if menu == "📊 Beranda":
+if menu == "\ud83d\udcca Beranda":
     st.header("Tentang Dataset")
     st.write("""
     Dataset ini digunakan untuk menganalisis dan memprediksi risiko diabetes berdasarkan informasi kesehatan pasien seperti umur, BMI, riwayat merokok, dan lain-lain.
@@ -60,7 +60,7 @@ if menu == "📊 Beranda":
     st.markdown(f"**Fitur:** {', '.join(df.columns)}")
 
 # Halaman Clustering
-elif menu == "🔍 Clustering (K-Means)":
+elif menu == "\ud83d\udd0d Clustering (K-Means)":
     st.header("Clustering Pasien Berdasarkan Kondisi Kesehatan")
 
     st.markdown("""
@@ -104,7 +104,7 @@ elif menu == "🔍 Clustering (K-Means)":
     st.pyplot(fig2)
 
 # Halaman Regresi Logistik
-elif menu == "📈 Regresi Logistik":
+elif menu == "\ud83d\udcc8 Regresi Logistik":
     st.header("Evaluasi Model Prediksi Diabetes")
 
     st.markdown("""
@@ -127,13 +127,47 @@ elif menu == "📈 Regresi Logistik":
     st.pyplot(fig3)
 
     y_pred = model.predict(X_scaled)
-    st.subheader("Classification Report")
-    st.text(classification_report(y, y_pred))
-    st.subheader("Confusion Matrix")
-    st.text(confusion_matrix(y, y_pred))
+
+    # Confusion Matrix
+    cm = confusion_matrix(y, y_pred)
+    tn, fp, fn, tp = cm.ravel()
+
+    st.subheader("Confusion Matrix (Tabel Prediksi vs Fakta)")
+    confusion_df = pd.DataFrame(cm,
+                                index=["Fakta: Tidak Diabetes", "Fakta: Diabetes"],
+                                columns=["Prediksi: Tidak Diabetes", "Prediksi: Diabetes"])
+    st.dataframe(confusion_df)
+
+    st.markdown("""
+    Keterangan:
+    - **True Negative (TN)**: Prediksi benar bahwa pasien tidak diabetes.
+    - **False Positive (FP)**: Prediksi salah, sistem mengira diabetes padahal tidak.
+    - **False Negative (FN)**: Prediksi salah, sistem mengira tidak diabetes padahal sebenarnya diabetes.
+    - **True Positive (TP)**: Prediksi benar bahwa pasien diabetes.
+    """)
+
+    # Classification Report
+    report = classification_report(y, y_pred, output_dict=True)
+    report_df = pd.DataFrame(report).transpose()
+    st.subheader("Ringkasan Evaluasi Model")
+    st.dataframe(report_df.loc[["0", "1"], ["precision", "recall", "f1-score"]].rename(index={"0": "Tidak Diabetes", "1": "Diabetes"}))
+
+    st.markdown("""
+    **Penjelasan:**
+    - **Precision**: Dari semua yang diprediksi sebagai diabetes, berapa banyak yang benar-benar diabetes.
+    - **Recall**: Dari semua pasien diabetes, berapa banyak yang berhasil dideteksi model.
+    - **F1-Score**: Gabungan antara precision dan recall. Nilai makin tinggi, model makin baik.
+    """)
+
+    st.subheader("Kesimpulan")
+    st.markdown(f"""
+    - Model memiliki **akurasi total** sekitar **{report['accuracy']:.2f}**.
+    - Model lebih baik dalam mendeteksi pasien yang **tidak diabetes** dibandingkan mendeteksi yang **diabetes** (lihat nilai recall).
+    - Hasil ini cocok sebagai alat bantu awal skrining, tapi **bukan pengganti diagnosis medis.**
+    """)
 
 # Halaman Prediksi
-elif menu == "🧪 Prediksi Diabetes":
+elif menu == "\ud83e\uddea Prediksi Diabetes":
     st.header("Prediksi Risiko Diabetes Berdasarkan Data Anda")
 
     st.markdown("Masukkan informasi Anda untuk melihat apakah Anda berisiko diabetes.")
@@ -164,8 +198,8 @@ elif menu == "🧪 Prediksi Diabetes":
 
         st.subheader("Hasil Prediksi")
         if prediction == 1:
-            st.markdown(f"🛑 **Anda kemungkinan memiliki risiko diabetes.**")
+            st.markdown(f"\ud83d\uded1 **Anda kemungkinan memiliki risiko diabetes.**")
         else:
-            st.markdown(f"✅ **Anda kemungkinan tidak memiliki risiko diabetes.**")
+            st.markdown(f"\u2705 **Anda kemungkinan tidak memiliki risiko diabetes.**")
 
         st.markdown(f"**Probabilitas:** {probability:.2f}")
