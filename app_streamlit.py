@@ -44,6 +44,22 @@ if menu == "Beranda":
 elif menu == "Clustering (K-Means)":
     st.header("🔍 Analisis Cluster (K-Means)")
 
+    # Elbow Method untuk menentukan jumlah cluster optimal
+    st.subheader("Metode Elbow untuk Menentukan Jumlah Cluster Optimal")
+    wcss = []
+    for i in range(1, 11):
+        kmeans = KMeans(n_clusters=i, random_state=0)
+        kmeans.fit(X_scaled)
+        wcss.append(kmeans.inertia_)
+
+    fig_elbow, ax_elbow = plt.subplots()
+    ax_elbow.plot(range(1, 11), wcss, marker='o')
+    ax_elbow.set_xlabel('Jumlah Cluster')
+    ax_elbow.set_ylabel('WCSS (Within-Cluster Sum of Squares)')
+    ax_elbow.set_title('Metode Elbow')
+    st.pyplot(fig_elbow)
+
+    # Slider jumlah cluster
     n_clusters = st.sidebar.slider("Jumlah Cluster", min_value=2, max_value=6, value=3)
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     cluster_labels = kmeans.fit_predict(X_scaled)
