@@ -102,7 +102,6 @@ elif menu == "Clustering (K-Means)":
 
         explanations = []
 
-        # Penilaian berdasarkan rata-rata per cluster
         if hba1c > mean_hba1c:
             hba1c_level = "tinggi"
             explanations.append(f"Rata-rata HbA1c {hba1c:.2f} lebih tinggi dari rata-rata semua cluster ({mean_hba1c:.2f})")
