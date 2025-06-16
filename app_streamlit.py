@@ -41,14 +41,6 @@ if menu == "Beranda":
     st.markdown(f"Jumlah Data: **{df.shape[0]}**")
     st.markdown(f"Jumlah Fitur: **{len(df.columns)}**")
 
-    # Visualisasi distribusi numerik simpel
-    st.subheader("📉 Distribusi Numerik")
-    numerical_cols = ['age', 'bmi', 'HbA1c_level', 'blood_glucose_level']
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-    df[numerical_cols].hist(bins=30, ax=axes.flatten())
-    plt.tight_layout()
-    st.pyplot(fig)
-
 elif menu == "Clustering (K-Means)":
     st.header("🔍 Analisis Cluster (K-Means)")
 
@@ -178,4 +170,23 @@ elif menu == "Prediksi Diabetes":
     glucose = st.number_input("Kadar Glukosa Darah", 50, 300, 100)
     gender = st.selectbox("Jenis Kelamin", ["Male", "Female", "Other"])
     hypertension = st.selectbox("Hipertensi", ["Tidak", "Ya"])
-    heart_disease = st.selectbox("Penyakit Jantung", ["Tidak
+    heart_disease = st.selectbox("Penyakit Jantung", ["Tidak", "Ya"])
+    smoking = st.selectbox("Riwayat Merokok", ["never", "current", "former", "ever", "not current", "No Info"])
+
+    if st.button("Prediksi"):
+        input_data = pd.DataFrame([[age, bmi, hba1c, glucose,
+                                     LabelEncoder().fit(["Male", "Female", "Other"]).transform([gender])[0],
+                                     1 if hypertension == "Ya" else 0,
+                                     1 if heart_disease == "Ya" else 0,
+                                     LabelEncoder().fit(["never", "current", "former", "ever", "not current", "No Info"]).transform([smoking])[0]]],
+                                    columns=features)
+
+        input_scaled = scaler.transform(input_data)
+        model = LogisticRegression(max_iter=1000)
+        model.fit(X_scaled, y)
+        pred = model.predict(input_scaled)[0]
+        prob = model.predict_proba(input_scaled)[0][1]
+
+        st.subheader("Hasil Prediksi")
+        st.markdown(f"**Prediksi:** {'Diabetes' if pred == 1 else 'Tidak Diabetes'}")
+        st.markdown(f"**Probabilitas:** {prob:.2f}")
