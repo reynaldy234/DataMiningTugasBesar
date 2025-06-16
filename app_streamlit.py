@@ -188,4 +188,22 @@ elif menu == "Regresi Logistik":
 
     st.subheader("ROC Curve")
     fig_roc, ax_roc = plt.subplots()
-    ax_roc.plot(fpr, tpr, label=f"AUC = {auc
+    ax_roc.plot(fpr, tpr, label=f"AUC = {auc:.3f}", color="darkorange")
+    ax_roc.plot([0, 1], [0, 1], linestyle="--", color="gray")
+    ax_roc.set_xlabel("False Positive Rate")
+    ax_roc.set_ylabel("True Positive Rate")
+    ax_roc.set_title("ROC Curve")
+    ax_roc.legend()
+    st.pyplot(fig_roc)
+
+    st.subheader("Confusion Matrix")
+    cm = confusion_matrix(y_test, y_pred)
+    fig_cm, ax_cm = plt.subplots()
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax_cm)
+    ax_cm.set_xlabel("Predicted")
+    ax_cm.set_ylabel("Actual")
+    ax_cm.set_title("Confusion Matrix")
+    st.pyplot(fig_cm)
+
+    st.subheader("Classification Report")
+    st.text(classification_report(y_test, y_pred))
