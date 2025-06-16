@@ -207,3 +207,39 @@ elif menu == "Regresi Logistik":
 
     st.subheader("Classification Report")
     st.text(classification_report(y_test, y_pred))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4‒ PREDIKSI ONLINE ──────────────────────────────────────────────────────────
+elif menu == "Prediksi Diabetes":
+    st.header("🧪 Prediksi Risiko Diabetes Baru")
+    st.write("Masukkan data untuk memprediksi kemungkinan diabetes:")
+
+    age = st.number_input("Umur", 0, 120, 30)
+    bmi = st.number_input("BMI", 10.0, 50.0, 22.0)
+    hba1c = st.number_input("HbA1c Level", 3.0, 15.0, 5.5)
+    glucose = st.number_input("Kadar Glukosa Darah", 50, 300, 100)
+    gender = st.selectbox("Jenis Kelamin", gender_le.classes_.tolist())
+    hypertension = st.selectbox("Hipertensi", ["Tidak", "Ya"])
+    heart_disease = st.selectbox("Penyakit Jantung", ["Tidak", "Ya"])
+    smoking = st.selectbox("Riwayat Merokok", smoking_le.classes_.tolist())
+
+    if st.button("Prediksi"):
+        input_array = np.array([
+            [
+                age,
+                bmi,
+                hba1c,
+                glucose,
+                gender_le.transform([gender])[0],
+                1 if hypertension == "Ya" else 0,
+                1 if heart_disease == "Ya" else 0,
+                smoking_le.transform([smoking])[0],
+            ]
+        ])
+        input_scaled = scaler.transform(input_array)
+        pred = log_reg.predict(input_scaled)[0]
+        prob = log_reg.predict_proba(input_scaled)[0][1]
+
+        st.subheader("Hasil Prediksi")
+        st.markdown(f"**Prediksi:** {'Diabetes' if pred == 1 else 'Tidak Diabetes'}")
+        st.markdown(f"**Probabilitas:** {prob:.2f}")
