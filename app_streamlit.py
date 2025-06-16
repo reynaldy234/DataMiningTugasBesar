@@ -26,7 +26,6 @@ def load_data():
 
     return df, gender_le, smoking_le
 
-
 df, gender_le, smoking_le = load_data()
 
 # Fitur & target
@@ -50,7 +49,7 @@ X_train, X_test, y_train, y_test = train_test_split(
     X_scaled, y, test_size=0.20, random_state=42, stratify=y
 )
 
-# Train logistic regression
+# Train logistic regression sekali saja
 log_reg = LogisticRegression(max_iter=1000)
 log_reg.fit(X_train, y_train)
 
@@ -72,32 +71,29 @@ if menu == "Beranda":
     st.markdown(f"Jumlah Data: **{df.shape[0]}**")
     st.markdown(f"Jumlah Fitur: **{len(df.columns)}**")
 
-    # Missing Values
-    st.subheader("❗ Missing Values")
-    missing_df = df.isnull().sum().reset_index()
-    missing_df.columns = ["Fitur", "Jumlah Missing"]
-    missing_df = missing_df[missing_df["Jumlah Missing"] > 0]
+    # Statistik deskriptif dasar
+    desc = df.describe().T.round(2)
 
-    if missing_df.empty:
-        st.success("Tidak ada missing values dalam dataset.")
-    else:
-        st.dataframe(missing_df)
+    # Tambahkan missing values
+    missing = df.isnull().sum()
+    desc["Missing Values"] = missing
 
-    # Boxplot fitur numerik
-    st.subheader("📦 Deteksi Outlier (Boxplot Fitur Numerik)")
-    num_cols = ["age", "bmi", "blood_glucose_level", "HbA1c_level"]
-    fig_box, axes = plt.subplots(1, len(num_cols), figsize=(16, 4))
+    # Tampilkan tabel deskriptif
+    st.subheader("📋 Statistik Deskriptif & Missing Values")
+    st.dataframe(desc.style.format("{:.2f}"))
 
-    for i, col in enumerate(num_cols):
-        sns.boxplot(y=df[col], ax=axes[i], color="skyblue")
-        axes[i].set_title(col)
-        axes[i].set_ylabel("")
+    # Boxplot
+    st.subheader("📦 Boxplot untuk Deteksi Outlier")
+    numeric_cols = ["age", "bmi", "blood_glucose_level", "HbA1c_level"]
+    for col in numeric_cols:
+        fig_box, ax_box = plt.subplots()
+        sns.boxplot(x=df[col], ax=ax_box, color='lightblue')
+        ax_box.set_title(f"Boxplot: {col}")
+        st.pyplot(fig_box)
 
-    st.pyplot(fig_box)
-
-    # Histogram distribusi fitur
+    # Histogram fitur numerik
     st.subheader("📉 Distribusi Fitur Numerik Tertentu")
-    selected_cols = ["age", "bmi", "HbA1c_level", "blood_glucose_level"]
+    selected_cols = numeric_cols
     ncols = 2
     nrows = (len(selected_cols) + ncols - 1) // ncols
 
@@ -126,7 +122,7 @@ elif menu == "Clustering (K-Means)":
     ax_elbow.set_title("Metode Elbow")
     st.pyplot(fig_elbow)
 
-    # Jalankan K‑Means dengan slider
+    # Slider cluster
     n_clusters = st.sidebar.slider("Jumlah Cluster", 2, 6, 3)
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     cluster_labels = kmeans.fit_predict(X_scaled)
@@ -140,32 +136,21 @@ elif menu == "Clustering (K-Means)":
 
     st.subheader("Visualisasi PCA per Cluster")
     fig_pca, ax_pca = plt.subplots()
-    sns.scatterplot(
-        data=cluster_df,
-        x="PC1",
-        y="PC2",
-        hue="Cluster",
-        palette="Set2",
-        ax=ax_pca,
-    )
+    sns.scatterplot(data=cluster_df, x="PC1", y="PC2", hue="Cluster", palette="Set2", ax=ax_pca)
     ax_pca.set_title("PCA Clustering")
     st.pyplot(fig_pca)
 
     # Rangkuman cluster
     st.subheader("📊 Karakteristik Rata‑rata per Cluster")
-    cluster_summary = (
-        df.groupby("Cluster")[features + ["diabetes"]].mean().reset_index()
-    )
+    cluster_summary = df.groupby("Cluster")[features + ["diabetes"]].mean().reset_index()
     cluster_counts = df["Cluster"].value_counts().reset_index()
     cluster_counts.columns = ["Cluster", "Jumlah Individu"]
     cluster_summary = pd.merge(cluster_summary, cluster_counts, on="Cluster")
-    cluster_summary["Persentase Diabetes"] = (
-        df.groupby("Cluster")["diabetes"].mean().values * 100
-    )
+    cluster_summary["Persentase Diabetes"] = df.groupby("Cluster")["diabetes"].mean().values * 100
     st.dataframe(cluster_summary.style.format({"Persentase Diabetes": "{:.2f}%"}))
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3‒ REGRESI LOGISTIK ─────────────────────────────────────────────────────────
+# 3‒ REGRESI LOGISTIK (test set) ──────────────────────────────────────────────
 elif menu == "Regresi Logistik":
     st.header("📈 Evaluasi Model Regresi Logistik – Test Set")
 
@@ -184,24 +169,16 @@ elif menu == "Regresi Logistik":
     ax_roc.legend()
     st.pyplot(fig_roc)
 
-    # Confusion‑matrix heat‑map
     st.subheader("Confusion Matrix")
     cm = confusion_matrix(y_test, y_pred)
     fig_cm, ax_cm = plt.subplots()
-    sns.heatmap(
-        cm,
-        annot=True,
-        fmt="d",
-        cmap="Blues",
-        ax=ax_cm,
-        xticklabels=["Pred Non‑Diabetes", "Pred Diabetes"],
-        yticklabels=["Actual Non‑Diabetes", "Actual Diabetes"],
-    )
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax_cm,
+                xticklabels=["Pred Non‑Diabetes", "Pred Diabetes"],
+                yticklabels=["Actual Non‑Diabetes", "Actual Diabetes"])
     ax_cm.set_xlabel("Prediksi")
     ax_cm.set_ylabel("Aktual")
     st.pyplot(fig_cm)
 
-    # Laporan klasifikasi
     st.subheader("Laporan Klasifikasi")
     report = classification_report(y_test, y_pred, output_dict=True)
     st.dataframe(pd.DataFrame(report).transpose().style.format("{:.2f}"))
