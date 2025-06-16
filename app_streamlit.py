@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from sklearn.metrics import roc_curve, roc_auc_score, confusion_matrix, classification_report
+from sklearn.metrics import roc_curve, roc_auc_score, confusion_matrix, classification_report, silhouette_score
 
 st.set_page_config(page_title="Dashboard Analisis Diabetes", layout="wide")
 
@@ -111,9 +111,9 @@ elif menu == "Clustering (K-Means)":
     st.subheader("Metode Elbow untuk Menentukan Jumlah Cluster Optimal")
     wcss = []
     for i in range(1, 11):
-        kmeans = KMeans(n_clusters=i, random_state=0)
-        kmeans.fit(X_scaled)
-        wcss.append(kmeans.inertia_)
+        kmeans_tmp = KMeans(n_clusters=i, random_state=0)
+        kmeans_tmp.fit(X_scaled)
+        wcss.append(kmeans_tmp.inertia_)
 
     fig_elbow, ax_elbow = plt.subplots()
     ax_elbow.plot(range(1, 11), wcss, marker="o")
@@ -122,8 +122,35 @@ elif menu == "Clustering (K-Means)":
     ax_elbow.set_title("Metode Elbow")
     st.pyplot(fig_elbow)
 
+    # Silhouette method dengan sample 10k
+    st.subheader("Silhouette Score (Sample 10 000 Data)")
+    sil_scores = []
+    for k in range(2, 11):
+        kmeans_tmp = KMeans(n_clusters=k, random_state=42)
+        labels_tmp = kmeans_tmp.fit_predict(X_scaled)
+        score_tmp = silhouette_score(X_scaled, labels_tmp, sample_size=10000, random_state=42)
+        sil_scores.append(score_tmp)
+
+    fig_sil, ax_sil = plt.subplots()
+    ax_sil.plot(range(2, 11), sil_scores, marker='o')
+    ax_sil.set_xlabel('Jumlah Cluster (k)')
+    ax_sil.set_ylabel('Silhouette Score')
+    ax_sil.set_title('Silhouette Method (10k Sample)')
+    st.pyplot(fig_sil)
+
+    best_k = np.argmax(sil_scores) + 2
+    best_score = sil_scores[np.argmax(sil_scores)]
+    if best_score >= 0.50:
+        quality = 'struktur cluster **kuat** (kompak & terpisah jelas).'
+    elif best_score >= 0.25:
+        quality = 'struktur cluster **sedang** (ada overlap ringan).'
+    else:
+        quality = 'struktur cluster **lemah** (banyak overlap).' 
+
+    st.markdown(f"Silhouette tertinggi = **{best_score:.3f}** pada **k = {best_k}** → {quality}")
+
     # Slider cluster
-    n_clusters = st.sidebar.slider("Jumlah Cluster", 2, 6, 3)
+    n_clusters = st.sidebar.slider("Jumlah Cluster", 2, 6, best_k)
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     cluster_labels = kmeans.fit_predict(X_scaled)
     df["Cluster"] = cluster_labels
@@ -161,60 +188,4 @@ elif menu == "Regresi Logistik":
 
     st.subheader("ROC Curve")
     fig_roc, ax_roc = plt.subplots()
-    ax_roc.plot(fpr, tpr, label=f"AUC = {auc:.2f}")
-    ax_roc.plot([0, 1], [0, 1], "--", color="gray")
-    ax_roc.set_xlabel("False Positive Rate")
-    ax_roc.set_ylabel("True Positive Rate")
-    ax_roc.set_title("Kurva ROC – Test Set")
-    ax_roc.legend()
-    st.pyplot(fig_roc)
-
-    st.subheader("Confusion Matrix")
-    cm = confusion_matrix(y_test, y_pred)
-    fig_cm, ax_cm = plt.subplots()
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax_cm,
-                xticklabels=["Pred Non‑Diabetes", "Pred Diabetes"],
-                yticklabels=["Actual Non‑Diabetes", "Actual Diabetes"])
-    ax_cm.set_xlabel("Prediksi")
-    ax_cm.set_ylabel("Aktual")
-    st.pyplot(fig_cm)
-
-    st.subheader("Laporan Klasifikasi")
-    report = classification_report(y_test, y_pred, output_dict=True)
-    st.dataframe(pd.DataFrame(report).transpose().style.format("{:.2f}"))
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 4‒ PREDIKSI ONLINE ──────────────────────────────────────────────────────────
-elif menu == "Prediksi Diabetes":
-    st.header("🧪 Prediksi Risiko Diabetes Baru")
-    st.write("Masukkan data untuk memprediksi kemungkinan diabetes:")
-
-    age = st.number_input("Umur", 0, 120, 30)
-    bmi = st.number_input("BMI", 10.0, 50.0, 22.0)
-    hba1c = st.number_input("HbA1c Level", 3.0, 15.0, 5.5)
-    glucose = st.number_input("Kadar Glukosa Darah", 50, 300, 100)
-    gender = st.selectbox("Jenis Kelamin", gender_le.classes_.tolist())
-    hypertension = st.selectbox("Hipertensi", ["Tidak", "Ya"])
-    heart_disease = st.selectbox("Penyakit Jantung", ["Tidak", "Ya"])
-    smoking = st.selectbox("Riwayat Merokok", smoking_le.classes_.tolist())
-
-    if st.button("Prediksi"):
-        input_array = np.array([
-            [
-                age,
-                bmi,
-                hba1c,
-                glucose,
-                gender_le.transform([gender])[0],
-                1 if hypertension == "Ya" else 0,
-                1 if heart_disease == "Ya" else 0,
-                smoking_le.transform([smoking])[0],
-            ]
-        ])
-        input_scaled = scaler.transform(input_array)
-        pred = log_reg.predict(input_scaled)[0]
-        prob = log_reg.predict_proba(input_scaled)[0][1]
-
-        st.subheader("Hasil Prediksi")
-        st.markdown(f"**Prediksi:** {'Diabetes' if pred == 1 else 'Tidak Diabetes'}")
-        st.markdown(f"**Probabilitas:** {prob:.2f}")
+    ax_roc.plot(fpr, tpr, label=f"AUC = {auc
