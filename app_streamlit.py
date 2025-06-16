@@ -41,17 +41,14 @@ if menu == "Beranda":
     st.markdown(f"Jumlah Data: **{df.shape[0]}**")
     st.markdown(f"Jumlah Fitur: **{len(df.columns)}**")
 
-    # Tambahan histogram per fitur (kecuali diabetes)
-    st.subheader("📊 Distribusi Setiap Fitur")
-    feature_cols = [c for c in df.columns if c != 'diabetes']
-    for col in feature_cols:
-        fig, ax = plt.subplots()
-        sns.histplot(df[col], kde=True, ax=ax)
-        ax.set_xlabel(col)
-        ax.set_ylabel("Frekuensi")
-        ax.set_title(f"Histogram {col}")
-        st.pyplot(fig)
-        plt.close(fig)
+    st.subheader("📉 Histogram Setiap Fitur")
+    exclude = ['diabetes']
+    for col in df.columns:
+        if col not in exclude:
+            fig, ax = plt.subplots()
+            sns.histplot(df[col], kde=True, ax=ax)
+            ax.set_title(f"Distribusi {col}")
+            st.pyplot(fig)
 
 elif menu == "Clustering (K-Means)":
     st.header("🔍 Analisis Cluster (K-Means)")
@@ -99,7 +96,7 @@ elif menu == "Clustering (K-Means)":
 
     st.dataframe(cluster_summary.style.format({"Persentase Diabetes": "{:.2f}%"}))
 
-    st.subheader("🧐 Interpretasi per Cluster")
+    st.subheader("🧠 Interpretasi per Cluster")
 
     mean_hba1c = cluster_summary['HbA1c_level'].mean()
     mean_glucose = cluster_summary['blood_glucose_level'].mean()
