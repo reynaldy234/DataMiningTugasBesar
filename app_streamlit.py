@@ -72,17 +72,15 @@ if menu == "Beranda":
     st.markdown(f"Jumlah Data: **{df.shape[0]}**")
     st.markdown(f"Jumlah Fitur: **{len(df.columns)}**")
 
-    # Visualisasi distribusi numerik sederhana (semua numerik kecuali target)
-    st.subheader("📉 Distribusi Fitur Numerik")
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    if "diabetes" in numeric_cols:
-        numeric_cols.remove("diabetes")
+    # Visualisasi distribusi fitur tertentu saja
+    st.subheader("📉 Distribusi Fitur Numerik Tertentu")
+    selected_cols = ['age', 'bmi', 'HbA1c_level', 'blood_glucose_level']
 
     ncols = 2
-    nrows = (len(numeric_cols) + ncols - 1) // ncols
+    nrows = (len(selected_cols) + ncols - 1) // ncols
 
     plt.figure(figsize=(12, 4 * nrows))
-    df[numeric_cols].hist(bins=30, layout=(nrows, ncols))
+    df[selected_cols].hist(bins=30, layout=(nrows, ncols))
     plt.tight_layout()
     st.pyplot(plt.gcf())
 
