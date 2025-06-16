@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
@@ -11,40 +12,91 @@ from sklearn.metrics import roc_curve, roc_auc_score, confusion_matrix, classifi
 
 st.set_page_config(page_title="Dashboard Analisis Diabetes", layout="wide")
 
-# Load dan siapkan data
+# ─────────────────────────────────────────────────────────────────────────────
+# Load & encode dataset ───────────────────────────────────────────────────────
 @st.cache_data
 def load_data():
-    df = pd.read_csv("diabetes_prediction_dataset.csv")
-    df['gender'] = LabelEncoder().fit_transform(df['gender'])
-    df['smoking_history'] = LabelEncoder().fit_transform(df['smoking_history'])
-    return df
+    df = pd.read_csv("diabetes_prediction_dataset.csv")  # ≈100 000 baris
 
-df = load_data()
+    gender_le = LabelEncoder()
+    smoking_le = LabelEncoder()
 
-features = ['age', 'bmi', 'HbA1c_level', 'blood_glucose_level',
-            'gender', 'hypertension', 'heart_disease', 'smoking_history']
+    df["gender"] = gender_le.fit_transform(df["gender"])
+    df["smoking_history"] = smoking_le.fit_transform(df["smoking_history"])
+
+    return df, gender_le, smoking_le
+
+
+df, gender_le, smoking_le = load_data()
+
+# Fitur & target
+features = [
+    "age",
+    "bmi",
+    "HbA1c_level",
+    "blood_glucose_level",
+    "gender",
+    "hypertension",
+    "heart_disease",
+    "smoking_history",
+]
 X = df[features]
-y = df['diabetes']
+y = df["diabetes"]
 
+# Standarisasi & split 80‑20
 scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+X_scaled = scaler.fit_transform(X)  # skala penuh: dipakai clustering & pra‑split
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=0.20, random_state=42, stratify=y
+)
 
-# Sidebar
+# Train logistic regression sekali saja
+log_reg = LogisticRegression(max_iter=1000)
+log_reg.fit(X_train, y_train)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sidebar & halaman ───────────────────────────────────────────────────────────
 st.sidebar.title("Navigasi")
-menu = st.sidebar.radio("Pilih Halaman", ["Beranda", "Clustering (K-Means)", "Regresi Logistik", "Prediksi Diabetes"])
+menu = st.sidebar.radio(
+    "Pilih Halaman",
+    ["Beranda", "Clustering (K-Means)", "Regresi Logistik", "Prediksi Diabetes"],
+)
 
 st.title("📊 Dashboard Analisis Risiko Diabetes")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 1‒ BERANDA ──────────────────────────────────────────────────────────────────
 if menu == "Beranda":
     st.header("📁 Deskripsi Dataset")
     st.dataframe(df.head())
     st.markdown(f"Jumlah Data: **{df.shape[0]}**")
     st.markdown(f"Jumlah Fitur: **{len(df.columns)}**")
 
+    # Histogram semua kolom numerik (kecuali target)
+    st.subheader("📉 Distribusi Fitur Numerik")
+    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    if "diabetes" in num_cols:
+        num_cols.remove("diabetes")
+
+    ncols = 2
+    nrows = (len(num_cols) + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(12, 4 * nrows))
+    axes = axes.flatten()
+    for i, col in enumerate(num_cols):
+        axes[i].hist(df[col], bins=30, color="skyblue", edgecolor="black")
+        axes[i].set_title(f"Distribusi {col}")
+    # Sembunyikan sumbu kosong jika jumlah kolom ganjil
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+    plt.tight_layout()
+    st.pyplot(fig)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2‒ CLUSTERING ───────────────────────────────────────────────────────────────
 elif menu == "Clustering (K-Means)":
     st.header("🔍 Analisis Cluster (K-Means)")
 
-    # Elbow Method untuk menentukan jumlah cluster optimal
+    # Elbow method
     st.subheader("Metode Elbow untuk Menentukan Jumlah Cluster Optimal")
     wcss = []
     for i in range(1, 11):
@@ -53,139 +105,123 @@ elif menu == "Clustering (K-Means)":
         wcss.append(kmeans.inertia_)
 
     fig_elbow, ax_elbow = plt.subplots()
-    ax_elbow.plot(range(1, 11), wcss, marker='o')
-    ax_elbow.set_xlabel('Jumlah Cluster')
-    ax_elbow.set_ylabel('WCSS (Within-Cluster Sum of Squares)')
-    ax_elbow.set_title('Metode Elbow')
+    ax_elbow.plot(range(1, 11), wcss, marker="o")
+    ax_elbow.set_xlabel("Jumlah Cluster")
+    ax_elbow.set_ylabel("WCSS")
+    ax_elbow.set_title("Metode Elbow")
     st.pyplot(fig_elbow)
 
-    # Slider jumlah cluster
-    n_clusters = st.sidebar.slider("Jumlah Cluster", min_value=2, max_value=6, value=3)
+    # Jalankan K‑Means dengan slider
+    n_clusters = st.sidebar.slider("Jumlah Cluster", 2, 6, 3)
     kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     cluster_labels = kmeans.fit_predict(X_scaled)
+    df["Cluster"] = cluster_labels
 
+    # PCA 2D plot
     pca = PCA(n_components=2)
     components = pca.fit_transform(X_scaled)
-    cluster_df = pd.DataFrame(components, columns=['PC1', 'PC2'])
-    cluster_df['Cluster'] = cluster_labels
-
-    df['Cluster'] = cluster_labels
+    cluster_df = pd.DataFrame(components, columns=["PC1", "PC2"])
+    cluster_df["Cluster"] = cluster_labels
 
     st.subheader("Visualisasi PCA per Cluster")
-    fig, ax = plt.subplots()
-    sns.scatterplot(data=cluster_df, x='PC1', y='PC2', hue='Cluster', palette='Set2', ax=ax)
-    ax.set_title("Visualisasi PCA dari Clustering")
-    st.pyplot(fig)
+    fig_pca, ax_pca = plt.subplots()
+    sns.scatterplot(
+        data=cluster_df,
+        x="PC1",
+        y="PC2",
+        hue="Cluster",
+        palette="Set2",
+        ax=ax_pca,
+    )
+    ax_pca.set_title("PCA Clustering")
+    st.pyplot(fig_pca)
 
-    st.subheader("📊 Karakteristik Rata-rata per Cluster")
-    cluster_summary = df.groupby('Cluster')[features + ['diabetes']].mean().reset_index()
-    cluster_counts = df['Cluster'].value_counts().reset_index()
-    cluster_counts.columns = ['Cluster', 'Jumlah Individu']
-    cluster_summary = pd.merge(cluster_summary, cluster_counts, on='Cluster')
-
-    cluster_summary['Persentase Diabetes'] = df.groupby('Cluster')['diabetes'].mean().values * 100
-
+    # Rangkuman cluster
+    st.subheader("📊 Karakteristik Rata‑rata per Cluster")
+    cluster_summary = (
+        df.groupby("Cluster")[features + ["diabetes"]].mean().reset_index()
+    )
+    cluster_counts = df["Cluster"].value_counts().reset_index()
+    cluster_counts.columns = ["Cluster", "Jumlah Individu"]
+    cluster_summary = pd.merge(cluster_summary, cluster_counts, on="Cluster")
+    cluster_summary["Persentase Diabetes"] = (
+        df.groupby("Cluster")["diabetes"].mean().values * 100
+    )
     st.dataframe(cluster_summary.style.format({"Persentase Diabetes": "{:.2f}%"}))
 
-    st.subheader("🧠 Interpretasi per Cluster")
-
-    mean_hba1c = cluster_summary['HbA1c_level'].mean()
-    mean_glucose = cluster_summary['blood_glucose_level'].mean()
-
-    for _, row in cluster_summary.iterrows():
-        cluster = int(row['Cluster'])
-        hba1c = row['HbA1c_level']
-        glucose = row['blood_glucose_level']
-        diabetes_pct = row['Persentase Diabetes']
-
-        st.markdown(f"### Cluster {cluster}")
-
-        explanations = []
-
-        if hba1c > mean_hba1c:
-            hba1c_level = "tinggi"
-            explanations.append(f"Rata-rata HbA1c {hba1c:.2f} lebih tinggi dari rata-rata semua cluster ({mean_hba1c:.2f})")
-        elif hba1c > mean_hba1c - 0.3:
-            hba1c_level = "sedang"
-            explanations.append(f"Rata-rata HbA1c {hba1c:.2f} sedikit di bawah rata-rata semua cluster")
-        else:
-            hba1c_level = "rendah"
-            explanations.append(f"Rata-rata HbA1c {hba1c:.2f} jauh di bawah rata-rata")
-
-        if glucose > mean_glucose:
-            glucose_level = "tinggi"
-            explanations.append(f"Rata-rata glukosa {glucose:.2f} lebih tinggi dari rata-rata semua cluster ({mean_glucose:.2f})")
-        elif glucose > mean_glucose - 5:
-            glucose_level = "sedang"
-            explanations.append(f"Rata-rata glukosa {glucose:.2f} sedikit di bawah rata-rata")
-        else:
-            glucose_level = "rendah"
-            explanations.append(f"Rata-rata glukosa {glucose:.2f} jauh di bawah rata-rata")
-
-        st.markdown(f"- **Persentase Diabetes:** {diabetes_pct:.2f}%")
-        st.markdown(f"- **Tingkat HbA1c:** {hba1c_level.capitalize()}")
-        st.markdown(f"- **Tingkat Glukosa:** {glucose_level.capitalize()}")
-        st.markdown(f"- **Interpretasi:** Risiko diabetes pada cluster ini sebesar {diabetes_pct:.2f}%.")
-        for ex in explanations:
-            st.markdown(f"  - {ex}")
-
+# ─────────────────────────────────────────────────────────────────────────────
+# 3‒ REGRESI LOGISTIK (test set) ──────────────────────────────────────────────
 elif menu == "Regresi Logistik":
-    st.header("📈 Evaluasi Model Regresi Logistik")
+    st.header("📈 Evaluasi Model Regresi Logistik – Test Set")
 
-    model = LogisticRegression(max_iter=1000)
-    model.fit(X_scaled, y)
-
-    y_prob = model.predict_proba(X_scaled)[:, 1]
-    y_pred = model.predict(X_scaled)
-
-    fpr, tpr, _ = roc_curve(y, y_prob)
-    auc = roc_auc_score(y, y_prob)
+    y_prob = log_reg.predict_proba(X_test)[:, 1]
+    y_pred = log_reg.predict(X_test)
+    fpr, tpr, _ = roc_curve(y_test, y_prob)
+    auc = roc_auc_score(y_test, y_prob)
 
     st.subheader("ROC Curve")
-    fig, ax = plt.subplots()
-    ax.plot(fpr, tpr, label=f"AUC = {auc:.2f}")
-    ax.plot([0, 1], [0, 1], linestyle='--', color='gray')
-    ax.set_xlabel("False Positive Rate")
-    ax.set_ylabel("True Positive Rate")
-    ax.set_title("Kurva ROC")
-    ax.legend()
-    st.pyplot(fig)
+    fig_roc, ax_roc = plt.subplots()
+    ax_roc.plot(fpr, tpr, label=f"AUC = {auc:.2f}")
+    ax_roc.plot([0, 1], [0, 1], "--", color="gray")
+    ax_roc.set_xlabel("False Positive Rate")
+    ax_roc.set_ylabel("True Positive Rate")
+    ax_roc.set_title("Kurva ROC – Test Set")
+    ax_roc.legend()
+    st.pyplot(fig_roc)
 
-    st.subheader("Confusion Matrix dan Laporan Klasifikasi")
-    cm = confusion_matrix(y, y_pred)
-    cm_df = pd.DataFrame(cm, index=["Non-Diabetes", "Diabetes"], columns=["Prediksi Non-Diabetes", "Prediksi Diabetes"])
-    st.dataframe(cm_df)
+    # Confusion‑matrix heat‑map
+    st.subheader("Confusion Matrix")
+    cm = confusion_matrix(y_test, y_pred)
+    fig_cm, ax_cm = plt.subplots()
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="Blues",
+        ax=ax_cm,
+        xticklabels=["Pred Non‑Diabetes", "Pred Diabetes"],
+        yticklabels=["Actual Non‑Diabetes", "Actual Diabetes"],
+    )
+    ax_cm.set_xlabel("Prediksi")
+    ax_cm.set_ylabel("Aktual")
+    st.pyplot(fig_cm)
 
-    report = classification_report(y, y_pred, output_dict=True)
-    report_df = pd.DataFrame(report).transpose()
-    st.dataframe(report_df.style.format("{:.2f}"))
+    # Laporan klasifikasi
+    st.subheader("Laporan Klasifikasi")
+    report = classification_report(y_test, y_pred, output_dict=True)
+    st.dataframe(pd.DataFrame(report).transpose().style.format("{:.2f}"))
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 4‒ PREDIKSI ONLINE ──────────────────────────────────────────────────────────
 elif menu == "Prediksi Diabetes":
     st.header("🧪 Prediksi Risiko Diabetes Baru")
-    st.write("Masukkan data berikut untuk memprediksi kemungkinan diabetes:")
+    st.write("Masukkan data untuk memprediksi kemungkinan diabetes:")
 
     age = st.number_input("Umur", 0, 120, 30)
     bmi = st.number_input("BMI", 10.0, 50.0, 22.0)
     hba1c = st.number_input("HbA1c Level", 3.0, 15.0, 5.5)
     glucose = st.number_input("Kadar Glukosa Darah", 50, 300, 100)
-    gender = st.selectbox("Jenis Kelamin", ["Male", "Female", "Other"])
+    gender = st.selectbox("Jenis Kelamin", gender_le.classes_.tolist())
     hypertension = st.selectbox("Hipertensi", ["Tidak", "Ya"])
     heart_disease = st.selectbox("Penyakit Jantung", ["Tidak", "Ya"])
-    smoking = st.selectbox("Riwayat Merokok", ["never", "current", "former", "ever", "not current", "No Info"])
+    smoking = st.selectbox("Riwayat Merokok", smoking_le.classes_.tolist())
 
     if st.button("Prediksi"):
-        input_data = pd.DataFrame([[age, bmi, hba1c, glucose,
-                                     LabelEncoder().fit(["Male", "Female", "Other"]).transform([gender])[0],
-                                     1 if hypertension == "Ya" else 0,
-                                     1 if heart_disease == "Ya" else 0,
-                                     LabelEncoder().fit(["never", "current", "former", "ever", "not current", "No Info"]).transform([smoking])[0]]],
-                                    columns=features)
-
-        input_scaled = scaler.transform(input_data)
-        model = LogisticRegression(max_iter=1000)
-        model.fit(X_scaled, y)
-        pred = model.predict(input_scaled)[0]
-        prob = model.predict_proba(input_scaled)[0][1]
+        input_array = np.array([
+            [
+                age,
+                bmi,
+                hba1c,
+                glucose,
+                gender_le.transform([gender])[0],
+                1 if hypertension == "Ya" else 0,
+                1 if heart_disease == "Ya" else 0,
+                smoking_le.transform([smoking])[0],
+            ]
+        ])
+        input_scaled = scaler.transform(input_array)
+        pred = log_reg.predict(input_scaled)[0]
+        prob = log_reg.predict_proba(input_scaled)[0][1]
 
         st.subheader("Hasil Prediksi")
         st.markdown(f"**Prediksi:** {'Diabetes' if pred == 1 else 'Tidak Diabetes'}")
