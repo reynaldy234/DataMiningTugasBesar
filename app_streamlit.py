@@ -72,24 +72,19 @@ if menu == "Beranda":
     st.markdown(f"Jumlah Data: **{df.shape[0]}**")
     st.markdown(f"Jumlah Fitur: **{len(df.columns)}**")
 
-    # Histogram semua kolom numerik (kecuali target)
+    # Visualisasi distribusi numerik sederhana (semua numerik kecuali target)
     st.subheader("📉 Distribusi Fitur Numerik")
-    num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    if "diabetes" in num_cols:
-        num_cols.remove("diabetes")
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    if "diabetes" in numeric_cols:
+        numeric_cols.remove("diabetes")
 
     ncols = 2
-    nrows = (len(num_cols) + ncols - 1) // ncols
-    fig, axes = plt.subplots(nrows, ncols, figsize=(12, 4 * nrows))
-    axes = axes.flatten()
-    for i, col in enumerate(num_cols):
-        axes[i].hist(df[col], bins=30, color="skyblue", edgecolor="black")
-        axes[i].set_title(f"Distribusi {col}")
-    # Sembunyikan sumbu kosong jika jumlah kolom ganjil
-    for j in range(i + 1, len(axes)):
-        axes[j].set_visible(False)
+    nrows = (len(numeric_cols) + ncols - 1) // ncols
+
+    plt.figure(figsize=(12, 4 * nrows))
+    df[numeric_cols].hist(bins=30, layout=(nrows, ncols))
     plt.tight_layout()
-    st.pyplot(fig)
+    st.pyplot(plt.gcf())
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2‒ CLUSTERING ───────────────────────────────────────────────────────────────
